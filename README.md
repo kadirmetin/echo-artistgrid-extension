@@ -7,9 +7,20 @@ ArtistGrid directly into the Echo app. Browse unreleased music catalogs organize
 
 ## Installation
 
-1. Download the latest `.eapk` file from the [Releases](https://github.com/kadirmetin/echo-artistgrid-extension/releases/latest) page.
-2. Open the `.eapk` file on your Android device.
-3. Select **Echo** as the handler and follow the on-screen prompts.
+Ensure you have Echo installed on your device before proceeding. Currently it's only possible to get it from [Discord](https://discord.gg/J3WvbBUU8Z).
+
+1. **Download the Extension**:
+   - Visit the [latest release page](https://github.com/kadirmetin/echo-artistgrid-extension/releases/latest).
+   - Download the latest `.eapk` file of the Deezer Extension.
+
+2. **Install the Extension**:
+   - Open the downloaded `.eapk` file.
+   - When prompted, select **Echo** as the application to install the extension.
+   - Follow the on-screen instructions to complete the installation.
+
+3. **Launch Echo**:
+   - Open the Echo app.
+   - The ArtistGrid Extension is now installed and ready to use.
 
 ## Acknowledgements
 
