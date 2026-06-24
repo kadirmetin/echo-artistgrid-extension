@@ -28,6 +28,16 @@ class UrlResolver(private val client: OkHttpClient) {
             "juicewrldapi.com"
         )
 
+        // ── Precompiled regex patterns ─────────────────────────────────────
+        val PILLOWS_REGEX = Regex("""pillows\.su/f/([a-f0-9]+)""")
+        val PIXELDRAIN_REGEX = Regex("""pixeldrain\.com/[ud]/([a-zA-Z0-9]+)""")
+        val KRAKENFILES_REGEX = Regex("""krakenfiles\.com/view/([a-zA-Z0-9]+)""")
+        val IMGUR_F_REGEX = Regex("""/f/([a-zA-Z0-9]+)""")
+        val IMGUR_ID_REGEX = Regex("""/([a-zA-Z0-9]+)(?:\\?|$)""")
+        val YETRACKER_REGEX = Regex("""files\.yetracker\.org/f/([a-zA-Z0-9]+)""")
+        val SOUNDCLOUD_REGEX = Regex("""soundcloud\.com/([^/]+/[^/?#]+)""")
+        val QOBUZ_REGEX = Regex("""qobuz\.com/track/(\\d+)""")
+
         /** Returns true only for URLs we know how to turn into audio. */
         private fun isResolvable(url: String): Boolean =
             RESOLVABLE_HOSTS.any { url.contains(it) } ||
@@ -36,13 +46,6 @@ class UrlResolver(private val client: OkHttpClient) {
         /** Returns true when the string looks like a URL. */
         fun isUrl(str: String?): Boolean =
             str != null && (str.startsWith("http://") || str.startsWith("https://"))
-
-        /**
-         * Picks the first link we can actually play.
-         * Returns null if no resolvable URL exists — the track is then skipped entirely.
-         */
-        fun firstTrackUrl(links: List<String>?, quality: String?, availableLength: String?): String? =
-            allTrackUrls(links, quality, availableLength).firstOrNull()
 
         /**
          * Returns ALL resolvable URLs for a track, in order.
@@ -91,20 +94,17 @@ class UrlResolver(private val client: OkHttpClient) {
     // ── Per-host resolvers ────────────────────────────────────────────────────
 
     private fun resolvePillows(url: String): String? {
-        val id = Regex("""pillows\.su/f/([a-f0-9]+)""").find(url)?.groupValues?.get(1)
-            ?: return null
+        val id = PILLOWS_REGEX.find(url)?.groupValues?.get(1) ?: return null
         return "https://api.pillows.su/api/download/$id"
     }
 
     private fun resolvePixeldrain(url: String): String? {
-        val id = Regex("""pixeldrain\.com/[ud]/([a-zA-Z0-9]+)""").find(url)?.groupValues?.get(1)
-            ?: return null
+        val id = PIXELDRAIN_REGEX.find(url)?.groupValues?.get(1) ?: return null
         return "https://pixeldrain.com/api/file/$id"
     }
 
     private suspend fun resolveKrakenfiles(url: String): String? {
-        val id = Regex("""krakenfiles\.com/view/([a-zA-Z0-9]+)""").find(url)?.groupValues?.get(1)
-            ?: return null
+        val id = KRAKENFILES_REGEX.find(url)?.groupValues?.get(1) ?: return null
         val req = Request.Builder().url("https://info.artistgrid.cx/kf/?id=$id").build()
         val res = client.newCall(req).await()
         val data = parseJsonBody(res.body?.string()) ?: return null
@@ -113,8 +113,8 @@ class UrlResolver(private val client: OkHttpClient) {
     }
 
     private suspend fun resolveImgur(url: String): String? {
-        val id = Regex("""/f/([a-zA-Z0-9]+)""").find(url)?.groupValues?.get(1)
-            ?: Regex("""/([a-zA-Z0-9]+)(?:\?|$)""").find(url)?.groupValues?.get(1)
+        val id = IMGUR_F_REGEX.find(url)?.groupValues?.get(1)
+            ?: IMGUR_ID_REGEX.find(url)?.groupValues?.get(1)
             ?: return null
         val req = Request.Builder().url("https://imgur.gg/api/file/$id").build()
         val res = client.newCall(req).await()
@@ -128,20 +128,17 @@ class UrlResolver(private val client: OkHttpClient) {
     }
 
     private fun resolveYetracker(url: String): String? {
-        val id = Regex("""files\.yetracker\.org/f/([a-zA-Z0-9]+)""").find(url)?.groupValues?.get(1)
-            ?: return null
+        val id = YETRACKER_REGEX.find(url)?.groupValues?.get(1) ?: return null
         return "https://files.yetracker.org/raw/$id"
     }
 
     private fun resolveSoundcloud(url: String): String? {
-        val path = Regex("""soundcloud\.com/([^/]+/[^/?#]+)""").find(url)?.groupValues?.get(1)
-            ?: return null
+        val path = SOUNDCLOUD_REGEX.find(url)?.groupValues?.get(1) ?: return null
         return "https://sc.maid.zone/_/restream/$path"
     }
 
     private suspend fun resolveQobuz(url: String): String? {
-        val id = Regex("""qobuz\.com/track/(\d+)""").find(url)?.groupValues?.get(1)
-            ?: return null
+        val id = QOBUZ_REGEX.find(url)?.groupValues?.get(1) ?: return null
         val req = Request.Builder()
             .url("https://qobuz.squid.wtf/api/download-music?track_id=$id&quality=27")
             .build()

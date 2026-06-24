@@ -93,45 +93,43 @@ class ArtistGridExtension : ExtensionClient, HomeFeedClient, SearchFeedClient, A
         val trackerId = artist.extras["trackerId"]?.takeIf { it.isNotBlank() }
             ?: return feedOf(emptyList())
 
-        // Fetch default tab to discover available tabs
-        val firstResponse = api.fetchTrackerData(trackerId)
+        // Fetch default tab (unreleased content only, no tab switcher)
+        val response = api.fetchTrackerData(trackerId)
             ?: return feedOf(emptyList())
 
-        val tabs = Mapper.toTabs(firstResponse)
-        val firstTabSlug = firstResponse.tab.slug
-
-        // No tabs → return a simple single-page feed
-        if (tabs.isEmpty()) {
-            return feedOf(Mapper.toShelves(firstResponse, artist, trackerId, firstTabSlug))
-        }
-
-        return Feed(tabs) { selectedTab ->
-            val tabSlug = selectedTab?.id ?: firstTabSlug
-            val v3 = if (selectedTab == null || selectedTab.id == tabs.first().id) {
-                firstResponse
-            } else {
-                api.fetchTrackerData(trackerId, selectedTab.id) ?: firstResponse
-            }
-            val shelves = Mapper.toShelves(v3, artist, trackerId, tabSlug)
-            Feed.Data(PagedData.Single { shelves }, null, null)
-        }
+        val shelves = Mapper.toShelves(response, artist, trackerId, response.tab.slug)
+        return feedOf(shelves)
     }
     // ── AlbumClient ──────────────────────────────────────────────────────────────
 
-    override suspend fun loadAlbum(album: Album): Album = album
+    override suspend fun loadAlbum(album: Album): Album {
+        val trackerId = album.extras["trackerId"]?.takeIf { it.isNotBlank() } ?: return album
+        val tabSlug = album.extras["tabSlug"]?.takeIf { it.isNotBlank() }
+        val v3 = api.fetchTrackerData(trackerId, tabSlug) ?: return album
+        val resolvedSlug = tabSlug ?: v3.tab.slug
+        val artist = album.artists.firstOrNull() ?: return album
+
+        if (album.extras["allTracks"] == "true") {
+            return Mapper.toAllTracksAlbum(v3, artist, trackerId, resolvedSlug)
+        }
+        val eraName = album.extras["eraName"]?.takeIf { it.isNotBlank() } ?: return album
+        val era = v3.eras?.find { it.name == eraName } ?: return album
+        return Mapper.toAlbum(era, artist, trackerId, resolvedSlug)
+    }
 
     override suspend fun loadTracks(album: Album): Feed<Track> {
         val trackerId = album.extras["trackerId"]?.takeIf { it.isNotBlank() }
             ?: return feedOf(emptyList())
         val tabSlug = album.extras["tabSlug"]?.takeIf { it.isNotBlank() }
-        val eraName = album.extras["eraName"] ?: return feedOf(emptyList())
-
         val v3 = api.fetchTrackerData(trackerId, tabSlug) ?: return feedOf(emptyList())
-        val era = v3.eras?.find { it.name == eraName } ?: return feedOf(emptyList())
-
         val artist = album.artists.firstOrNull() ?: Artist(id = trackerId, name = "")
-        val tracks = Mapper.eraToTracks(era, artist)
-        return feedOf(tracks)
+
+        if (album.extras["allTracks"] == "true") {
+            return feedOf(Mapper.allErasTracks(v3, artist))
+        }
+        val eraName = album.extras["eraName"] ?: return feedOf(emptyList())
+        val era = v3.eras?.find { it.name == eraName } ?: return feedOf(emptyList())
+        return feedOf(Mapper.eraToTracks(era, artist, album))
     }
 
     override suspend fun loadFeed(album: Album): Feed<Shelf>? = null
@@ -168,7 +166,7 @@ class ArtistGridExtension : ExtensionClient, HomeFeedClient, SearchFeedClient, A
                         id = item.id,
                         title = item.name,
                         coverUrl = coverUrlOf(item),
-                        extras = item.extras ?: emptyMap()
+                        extras = item.extras
                     )
                     is Album -> LikedItemData(
                         type = "album",
@@ -176,18 +174,18 @@ class ArtistGridExtension : ExtensionClient, HomeFeedClient, SearchFeedClient, A
                         title = item.title,
                         subtitle = item.artists.firstOrNull()?.name ?: "",
                         coverUrl = coverUrlOf(item),
-                        extras = item.extras ?: emptyMap()
+                        extras = item.extras
                     )
                     is Track -> {
-                        val url = item.extras?.get("url")
-                            ?: item.streamables?.firstOrNull()?.extras?.get("url") ?: ""
+                        val url = item.extras["url"]
+                            ?: item.streamables.firstOrNull()?.extras?.get("url") ?: ""
                         LikedItemData(
                             type = "track",
                             id = item.id,
                             title = item.title,
                             subtitle = item.artists.firstOrNull()?.name ?: "",
                             coverUrl = coverUrlOf(item),
-                            extras = (item.extras ?: emptyMap()) + mapOf("url" to url),
+                            extras = item.extras + mapOf("url" to url),
                             duration = item.duration,
                             description = item.description,
                             artistNames = item.artists.map { it.name },
